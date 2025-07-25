@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
 #[derive(Debug, PartialEq)]
 pub enum Token {
     VARIABLE,
@@ -13,11 +16,13 @@ impl std::fmt::Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Grammar {
     ROOT,
-    VALUE,
-    OPERATOR,
+    VALUE(char),
+    VARIABLE(char),
+    OPERATOR(char),
+    NEGATION,
 }
 
 impl std::fmt::Display for Grammar {
@@ -27,20 +32,43 @@ impl std::fmt::Display for Grammar {
 }
 
 pub struct Node {
-    pub value: Grammar,
-    pub children: Vec<Node>,
+    value: Grammar,
+    parent: Option<Weak<RefCell<Node>>>,
+    children: Vec<Rc<RefCell<Node>>>,
 }
 
 impl Node {
-    pub fn add_child(&mut self, child: Grammar) {
-        self.children.push(Node::new(child));
-    }
-
-    pub fn new(node_type: Grammar) -> Self {
-        Self {
-            value: node_type,
+    pub fn new(value: Grammar) -> Self {
+        Node {
+            value,
+            parent: None,
             children: Vec::new(),
         }
+    }
+    pub fn add_child(self_rc: &Rc<RefCell<Node>>, value: Grammar) -> Rc<RefCell<Node>> {
+        let child = Rc::new(RefCell::new(Node {
+            value,
+            parent: Some(Rc::downgrade(self_rc)),
+            children: Vec::new(),
+        }));
+
+        self_rc.borrow_mut().children.push(child.clone());
+        child.clone()
+    }
+
+    pub fn replace_if_match(&mut self, target: Grammar, value: Grammar) {
+        if self.value == target {
+            self.value = value;
+            self.children.clear();
+        }
+    }
+
+    pub fn get_parent(&self) -> Option<Rc<RefCell<Node>>> {
+        self.parent.as_ref().and_then(|weak| weak.upgrade())
+    }
+
+    pub fn get_children(&self) -> &Vec<Rc<RefCell<Node>>> {
+        &self.children
     }
 }
 
@@ -51,7 +79,7 @@ impl std::fmt::Display for Node {
         } else {
             write!(f, "{}( ", self.value).unwrap();
             for child in &self.children {
-                write!(f, " {}, ", child).unwrap();
+                write!(f, "{}, ", child.borrow()).unwrap();
             }
             write!(f, " )")
         }

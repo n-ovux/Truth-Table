@@ -1,6 +1,8 @@
 mod ast;
 
 use crate::ast::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 fn main() {
     let mut arguments: std::env::Args = std::env::args();
@@ -10,6 +12,7 @@ fn main() {
 
     // Error Checker and Tokenizer
     let mut tokens: Vec<(Token, char)> = Vec::new();
+    let mut variables: Vec<char> = Vec::new();
     let mut brackets: u8 = 0;
     arguments.next();
     for argument in arguments {
@@ -67,6 +70,9 @@ fn main() {
                     tokens.push((Token::CONSTANT, symbol));
                 } else {
                     tokens.push((Token::VARIABLE, symbol));
+                    if !variables.contains(&symbol) {
+                        variables.push(symbol);
+                    }
                 }
             }
         }
@@ -75,27 +81,51 @@ fn main() {
         example_exit("Unequal amount of brackets!", 9);
     }
 
-    println!("{:?}", tokens);
+    if variables.is_empty() {
+        example_exit("No variables found in expression", 10);
+    }
 
-    let mut ast: Node = Node::new(Grammar::ROOT);
-    let mut current_node: &mut Node = &mut ast;
+    println!("{:?}", tokens);
+    println!("{:?}", variables);
+
+    let ast = Rc::new(RefCell::new(Node::new(Grammar::ROOT)));
+    let mut current_node = ast.clone();
+    let mut last_node = ast.clone();
     for token in tokens {
         match token.0 {
-            Token::VARIABLE => current_node.add_child(Grammar::VALUE),
-            Token::CONSTANT => current_node.add_child(Grammar::VALUE),
-            Token::OPERATOR => current_node.add_child(Grammar::OPERATOR),
-            Token::NEGATION => current_node.add_child(Grammar::OPERATOR),
+            Token::VARIABLE => {
+                last_node = Node::add_child(&current_node, Grammar::VARIABLE(token.1))
+            }
+            Token::CONSTANT => last_node = Node::add_child(&current_node, Grammar::VALUE(token.1)),
+            Token::OPERATOR => {
+                last_node = Node::add_child(&current_node, Grammar::OPERATOR(token.1))
+            }
+            Token::NEGATION => last_node = Node::add_child(&current_node, Grammar::NEGATION),
             Token::BRACKET => {
                 if token.1 == '[' {
-                    last_node = current_node;
-                    current_node = current_node.children.last_mut().unwrap();
+                    current_node = last_node.clone();
                 } else {
-                    current_node = last_node;
+                    let node = current_node.clone();
+                    current_node = node.borrow().get_parent().unwrap().clone();
                 }
             }
         }
     }
-    println!("{ast}");
+    println!("{}", ast.borrow());
+
+    let mut truth_table: Vec<bool> = Vec::new();
+    truth_table.reserve(2_usize.pow(variables.len().try_into().unwrap()));
+
+    replace_all(&ast, Grammar::VARIABLE('p'), Grammar::VALUE('t'));
+    println!("{}", ast.borrow());
+}
+
+fn replace_all(tree: &Rc<RefCell<Node>>, target: Grammar, value: Grammar) {
+    let mut node = tree.borrow_mut();
+    node.replace_if_match(target, value);
+    for child in node.get_children() {
+        replace_all(child, target, value);
+    }
 }
 
 fn example_exit(error_text: &str, exit_code: i32) {
