@@ -3,10 +3,9 @@ use std::rc::{Rc, Weak};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    VARIABLE,
+    VALUE,
     BRACKET,
     OPERATOR,
-    CONSTANT,
     NEGATION,
 }
 
@@ -70,18 +69,37 @@ impl Node {
     pub fn get_children(&self) -> &Vec<Rc<RefCell<Node>>> {
         &self.children
     }
+
+    pub fn find_replace(&mut self, target: Grammar, value: Grammar) {
+        self.replace_if_match(target, value);
+        for child in &self.children {
+            child.borrow_mut().replace_if_match(target, value);
+        }
+    }
+
+    pub fn evaluate(&mut self) -> bool {
+        if self.children.is_empty() {
+            todo!()
+        } else {
+            for child in &self.children {
+                child.borrow_mut().evaluate();
+            }
+        }
+        false
+    }
+
+    fn write(&self, f: &mut std::fmt::Formatter<'_>, depth: usize) {
+        writeln!(f, "{}{}", "  ".repeat(depth), self.value).unwrap();
+
+        for child in &self.children {
+            child.borrow().write(f, depth + 1);
+        }
+    }
 }
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.children.is_empty() {
-            write!(f, "{}", self.value)
-        } else {
-            write!(f, "{}( ", self.value).unwrap();
-            for child in &self.children {
-                write!(f, "{}, ", child.borrow()).unwrap();
-            }
-            write!(f, " )")
-        }
+        self.write(f, 0);
+        Ok(())
     }
 }

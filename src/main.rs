@@ -7,69 +7,36 @@ use std::rc::Rc;
 fn main() {
     let mut arguments: std::env::Args = std::env::args();
     if arguments.len() == 1 {
-        example_exit("Not Enough Arguments", 1);
+        example_exit("Not Enough Arguments");
     }
 
-    // Error Checker and Tokenizer
+    // Tokenizer
     let mut tokens: Vec<(Token, char)> = Vec::new();
     let mut variables: Vec<char> = Vec::new();
-    let mut brackets: u8 = 0;
     arguments.next();
     for argument in arguments {
         if argument.chars().count() != 1 {
-            example_exit("Symbol {symbol} too long!", 2);
+            example_exit("Invalid Symbol!");
         }
 
         let symbol = argument.chars().next().unwrap();
         match symbol {
             '[' | ']' => {
-                if symbol == '[' {
-                    brackets += 1;
-                    if tokens.last().is_some()
-                        && (tokens.last().unwrap().0 == Token::CONSTANT
-                            || tokens.last().unwrap().0 == Token::VARIABLE
-                            || tokens.last().unwrap().1 == ']')
-                    {
-                        example_exit("No operators between value and bracket", 3);
-                    }
-                } else {
-                    if tokens.last().is_some() && (tokens.last().unwrap().0 == Token::NEGATION) {
-                        example_exit("Negation before closing bracket", 4);
-                    }
-                    if brackets == 0 {
-                        example_exit("Closed bracket before opening bracket!", 5);
-                    }
-                    brackets -= 1;
-                }
-
                 tokens.push((Token::BRACKET, symbol));
             }
             '+' | '.' => {
-                if tokens.last().is_some() && (tokens.last().unwrap().0 == Token::OPERATOR) {
-                    example_exit("No value between operators", 6);
-                }
-
                 tokens.push((Token::OPERATOR, symbol));
             }
             '-' => {
-                if tokens.last().is_some() && (tokens.last().unwrap().0 != Token::OPERATOR) {
-                    example_exit("No operator before negation", 7);
-                }
-
                 tokens.push((Token::NEGATION, symbol));
             }
             _ => {
-                if tokens.last().is_some()
-                    && (tokens.last().unwrap().0 == Token::VARIABLE
-                        || tokens.last().unwrap().0 == Token::CONSTANT)
-                {
-                    example_exit("No operator between values", 8);
-                }
-
-                if symbol == 't' || symbol == 'c' || symbol == 'c' {
-                    tokens.push((Token::CONSTANT, symbol));
+                if symbol == 't' {
+                    tokens.push((Token::VALUE, symbol));
+                } else if symbol == 'f' || symbol == 'c' {
+                    tokens.push((Token::VALUE, 'c'));
                 } else {
-                    tokens.push((Token::VARIABLE, symbol));
+                    tokens.push((Token::VALUE, symbol));
                     if !variables.contains(&symbol) {
                         variables.push(symbol);
                     }
@@ -77,26 +44,86 @@ fn main() {
             }
         }
     }
-    if brackets != 0 {
-        example_exit("Unequal amount of brackets!", 9);
-    }
-
     if variables.is_empty() {
-        example_exit("No variables found in expression", 10);
+        example_exit("No variables found in expression");
     }
 
     println!("{:?}", tokens);
     println!("{:?}", variables);
+
+    // Error Checker
+    let mut tokens_iter = tokens.iter();
+    let mut last_token = tokens_iter.next().unwrap();
+    let mut values_in_scope: Vec<i8> = if last_token.0 == Token::VALUE {
+        vec![1]
+    } else {
+        vec![0]
+    };
+    let mut brackets: u8 = if last_token.1 == '[' { 1 } else { 0 };
+    for token in tokens_iter {
+        match token.0 {
+            Token::VALUE => {
+                if last_token.0 == Token::VALUE {
+                    example_exit("No operator between values!");
+                }
+                *values_in_scope.last_mut().unwrap() += 1;
+                if *values_in_scope.last().unwrap() > 2 {
+                    example_exit("Ambiguous expression!");
+                }
+            }
+            Token::BRACKET => {
+                if token.1 == '[' {
+                    if last_token.0 == Token::VALUE {
+                        example_exit("Value before opening bracket!");
+                    }
+                    brackets += 1;
+                    values_in_scope.push(0);
+                } else {
+                    if last_token.0 == Token::OPERATOR {
+                        example_exit("Operator or negation before closing bracket!");
+                    }
+                    if brackets == 0 {
+                        example_exit("No opening bracket to match closing bracket!");
+                    }
+                    brackets -= 1;
+                    if values_in_scope.len() == 1 {
+                        values_in_scope[0] = 1;
+                    } else {
+                        values_in_scope.pop();
+                        *values_in_scope.last_mut().unwrap() += 1;
+                    }
+                }
+            }
+            Token::OPERATOR => {
+                if last_token.0 == Token::OPERATOR || last_token.0 == Token::NEGATION {
+                    example_exit("No value before operator!");
+                }
+            }
+            Token::NEGATION => {
+                if last_token.0 != Token::OPERATOR {
+                    example_exit("No operator before negation!");
+                }
+            }
+        }
+        last_token = token;
+    }
+
+    if brackets != 0 {
+        example_exit("Unequal amount of brackets!");
+    }
 
     let ast = Rc::new(RefCell::new(Node::new(Grammar::ROOT)));
     let mut current_node = ast.clone();
     let mut last_node = ast.clone();
     for token in tokens {
         match token.0 {
-            Token::VARIABLE => {
-                last_node = Node::add_child(&current_node, Grammar::VARIABLE(token.1))
+            Token::VALUE => {
+                if token.1 == 't' || token.1 == 'c' {
+                    last_node = Node::add_child(&current_node, Grammar::VALUE(token.1));
+                } else {
+                    last_node = Node::add_child(&current_node, Grammar::VARIABLE(token.1));
+                }
             }
-            Token::CONSTANT => last_node = Node::add_child(&current_node, Grammar::VALUE(token.1)),
             Token::OPERATOR => {
                 last_node = Node::add_child(&current_node, Grammar::OPERATOR(token.1))
             }
@@ -105,8 +132,10 @@ fn main() {
                 if token.1 == '[' {
                     current_node = last_node.clone();
                 } else {
-                    let node = current_node.clone();
-                    current_node = node.borrow().get_parent().unwrap().clone();
+                    let node = current_node.clone().borrow().get_parent();
+                    if let Some(parent) = node {
+                        current_node = parent.clone();
+                    }
                 }
             }
         }
@@ -116,20 +145,13 @@ fn main() {
     let mut truth_table: Vec<bool> = Vec::new();
     truth_table.reserve(2_usize.pow(variables.len().try_into().unwrap()));
 
-    replace_all(&ast, Grammar::VARIABLE('p'), Grammar::VALUE('t'));
-    println!("{}", ast.borrow());
+    // ast.borrow_mut()
+    //     .find_replace(Grammar::VARIABLE('p'), Grammar::VALUE('t'));
+    // println!("{}", ast.borrow());
 }
 
-fn replace_all(tree: &Rc<RefCell<Node>>, target: Grammar, value: Grammar) {
-    let mut node = tree.borrow_mut();
-    node.replace_if_match(target, value);
-    for child in node.get_children() {
-        replace_all(child, target, value);
-    }
-}
-
-fn example_exit(error_text: &str, exit_code: i32) {
+fn example_exit(error_text: &str) {
     println!("{error_text}");
     println!("Example Input: [ p + q ] . r");
-    std::process::exit(exit_code);
+    std::process::exit(1);
 }
