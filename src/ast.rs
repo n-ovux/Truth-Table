@@ -1,25 +1,10 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-#[derive(Debug, PartialEq)]
-pub enum Token {
-    VALUE,
-    BRACKET,
-    OPERATOR,
-    NEGATION,
-}
-
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Grammar {
-    ROOT,
+    BODY,
     VALUE(char),
-    VARIABLE(char),
     OPERATOR(char),
     NEGATION,
 }
@@ -55,6 +40,19 @@ impl Node {
         child.clone()
     }
 
+    pub fn reparent(self_rc: &Rc<RefCell<Node>>, new_parent: &Rc<RefCell<Node>>) {
+        if let Some(parent) = self_rc.borrow().get_parent() {
+            parent
+                .borrow_mut()
+                .get_children()
+                .retain(|child| !Rc::ptr_eq(child, self_rc));
+        }
+
+        self_rc.borrow_mut().parent = Some(Rc::downgrade(new_parent));
+
+        new_parent.borrow_mut().children.push(self_rc.clone());
+    }
+
     pub fn replace_if_match(&mut self, target: Grammar, value: Grammar) {
         if self.value == target {
             self.value = value;
@@ -66,8 +64,8 @@ impl Node {
         self.parent.as_ref().and_then(|weak| weak.upgrade())
     }
 
-    pub fn get_children(&self) -> &Vec<Rc<RefCell<Node>>> {
-        &self.children
+    fn get_children(&mut self) -> &mut Vec<Rc<RefCell<Node>>> {
+        &mut self.children
     }
 
     pub fn find_replace(&mut self, target: Grammar, value: Grammar) {
