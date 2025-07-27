@@ -134,8 +134,23 @@ impl Token {
             }
             _ => {}
         }
+        if Self::get_variables(&tokens).is_empty() {
+            return Err(ErrorType::NoVariables);
+        }
 
         Ok(())
+    }
+
+    pub fn get_variables(tokens: &Vec<Token>) -> Vec<char> {
+        let mut variables: Vec<char> = Vec::new();
+        for token in tokens {
+            if let Token::Value(value) = token {
+                if *value != 't' && *value != 'c' {
+                    variables.push(*value);
+                }
+            }
+        }
+        variables
     }
 }
 
@@ -150,12 +165,12 @@ pub mod token_error {
         AmbiguousExpression,
         ValueBeforeOpeningBracket,
         OperatorBeforeClosingBracket,
-        NegationBeforeClosingBracket,
         NoOpeningBracketToMatchClosing,
         NoValueBeforeOperator,
         MissingOpeningOrClosingBracket,
         NoOperatorBeforeNegation,
         DoesNotEnd,
+        NoVariables,
     }
 
     impl std::fmt::Display for ErrorType {

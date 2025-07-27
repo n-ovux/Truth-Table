@@ -24,7 +24,10 @@ fn main() {
         panic!("Invalid Input: {}", error);
     });
 
+    let variables = Token::get_variables(&tokens);
+
     println!("{:?}", tokens);
+    println!("{:?}", variables);
 
     // Generate AST
     let ast: Tree<Grammar> = Tree::<Grammar>::create_ast(&tokens);
