@@ -1,6 +1,6 @@
 use token_error::ErrorType;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token {
     Value(char),
     OpeningBracket,
@@ -92,9 +92,9 @@ impl Token {
                     if let Token::Operator(_) = *last_token {
                         return Err(ErrorType::OperatorBeforeClosingBracket);
                     }
-                    if let Token::ClosingBracket = *last_token {
-                        return Err(ErrorType::NegationBeforeClosingBracket);
-                    }
+                    // if let Token::ClosingBracket = *last_token {
+                    //     return Err(ErrorType::NegationBeforeClosingBracket);
+                    // }
                     if brackets == 0 {
                         return Err(ErrorType::NoOpeningBracketToMatchClosing);
                     }

@@ -3,12 +3,14 @@ use std::cmp::PartialEq;
 use std::fmt::{self, Debug, Display};
 use std::rc::{Rc, Weak};
 
+#[derive(Debug)]
 struct Node<T> {
     value: T,
     parent: Weak<RefCell<Self>>,
     children: Vec<Tree<T>>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Tree<T> {
     head: Rc<RefCell<Node<T>>>,
 }
