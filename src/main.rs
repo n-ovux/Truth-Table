@@ -1,10 +1,9 @@
 mod ast;
-mod tokenizer;
+mod lexer;
 mod tree;
 
-use crate::ast::{Grammar, AST};
-use crate::tokenizer::Token;
-use crate::tree::Tree;
+use ast::{Grammar, AST};
+use tree::Tree;
 
 fn main() {
     let mut arguments: std::env::Args = std::env::args();
@@ -15,21 +14,15 @@ fn main() {
 
     // Tokenize Input
     let text = arguments.collect();
-    let tokens = Token::tokenize(&text).unwrap_or_else(|error| {
-        panic!("Could not tokenize input: {}", error);
+    let (tokens, variables) = lexer::lexer(&text).unwrap_or_else(|error| {
+        panic!("Invalid input: {}", error);
     });
-
-    // Error Checker
-    Token::verify(&tokens).unwrap_or_else(|error| {
-        panic!("Invalid Input: {}", error);
-    });
-
-    let variables = Token::get_variables(&tokens);
 
     println!("{:?}", tokens);
     println!("{:?}", variables);
 
     // Generate AST
-    let ast: Tree<Grammar> = Tree::<Grammar>::create_ast(&tokens);
-    println!("{}", ast);
+    let mut ast = Tree::new(Grammar::Root);
+    ast.create_ast(&tokens);
+    println!("\nFinal!\n{}", ast);
 }

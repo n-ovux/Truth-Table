@@ -1,28 +1,23 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use crate::tokenizer::Token;
+use crate::lexer::Token;
 use crate::tree::Tree;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Grammar {
-    Body,
+    Root,
     Value(char),
     Operator(char),
     Negation,
 }
 
 pub trait AST {
-    fn create_ast(tokens: &[Token]) -> Self;
+    fn create_ast(&mut self, tokens: &[Token]) -> usize;
 }
 
 impl AST for Tree<Grammar> {
-    fn create_ast(tokens: &[Token]) -> Self {
-        let root = Tree::new(Grammar::Body);
-
-        let mut current_operator: Option<RefCell<Tree<Grammar>>> = None;
-        let mut current_value: Option<Rc<Tree<Grammar>>> = None;
-        let mut current_value_head: Option<Rc<Tree<Grammar>>> = None;
+    fn create_ast(&mut self, tokens: &[Token]) -> usize {
+        let mut current_operator: Option<usize> = None;
+        let mut current_value: Option<usize> = None;
+        let mut current_value_head: Option<usize> = None;
         let mut blacklisted_indices: Vec<usize> = Vec::new();
         for (index, token) in tokens.iter().enumerate() {
             if blacklisted_indices.contains(&index) {
@@ -30,35 +25,25 @@ impl AST for Tree<Grammar> {
             }
             match token {
                 Token::Operator(operator) => {
-                    current_operator =
-                        Some(RefCell::new(root.add_child(Grammar::Operator(*operator))));
-                    current_value_head
-                        .take()
-                        .unwrap()
-                        .reparent(&current_operator.as_ref().unwrap().borrow());
+                    current_operator = Some(self.add_child(0, Grammar::Operator(*operator)));
+                    self.reparent(current_value_head.unwrap(), current_operator.unwrap());
                     current_value = None;
+                    current_value_head = None;
                 }
                 Token::Value(value) => {
-                    if let Some(_) = &current_value_head {
-                        let new = current_value
-                            .take()
-                            .unwrap()
-                            .add_child(Grammar::Value(*value));
-                        current_value = Some(Rc::new(new));
+                    if let Some(past_index) = current_value {
+                        current_value = Some(self.add_child(past_index, Grammar::Value(*value)));
                     } else {
-                        let new = Rc::new(Tree::new(Grammar::Value(*value)));
-                        current_value = Some(Rc::clone(&new));
-                        current_value_head = Some(Rc::clone(&new));
+                        current_value_head = Some(self.add_child(0, Grammar::Value(*value)));
+                        current_value = Some(*current_value_head.as_ref().unwrap());
                     }
                 }
                 Token::Negation => {
-                    if let Some(_) = &current_value_head {
-                        let new = current_value.as_ref().unwrap().add_child(Grammar::Negation);
-                        current_value = Some(Rc::new(new));
+                    if let Some(past_index) = current_value {
+                        current_value = Some(self.add_child(past_index, Grammar::Negation));
                     } else {
-                        let new = Rc::new(Tree::new(Grammar::Negation));
-                        current_value = Some(Rc::clone(&new));
-                        current_value_head = Some(Rc::clone(&new));
+                        current_value_head = Some(self.add_child(0, Grammar::Negation));
+                        current_value = Some(*current_value_head.as_ref().unwrap());
                     }
                 }
                 Token::OpeningBracket => {
@@ -80,29 +65,25 @@ impl AST for Tree<Grammar> {
                     for sub_index in index..ending_index {
                         blacklisted_indices.push(sub_index);
                     }
-                    if let Some(_) = &current_value_head {
-                        let new = Tree::<Grammar>::create_ast(&tokens[index + 1..ending_index + 1]);
-                        new.reparent(current_value.as_ref().unwrap());
-                        current_value = Some(Rc::new(new));
+                    let sub_index = self.create_ast(&tokens[index + 1..ending_index + 1]);
+                    if let Some(past_index) = current_value {
+                        self.reparent(sub_index, past_index);
+                        current_value = Some(sub_index);
                     } else {
-                        let new = Rc::new(Tree::<Grammar>::create_ast(
-                            &tokens[index + 1..ending_index + 1],
-                        ));
-                        current_value = Some(Rc::clone(&new));
-                        current_value_head = Some(Rc::clone(&new));
+                        self.reparent(sub_index, 0);
+                        current_value_head = Some(sub_index);
+                        current_value = Some(*current_value_head.as_ref().unwrap());
                     }
                 }
                 Token::ClosingBracket => {}
             }
         }
         if let Some(operator) = current_operator {
-            current_value_head
-                .take()
-                .unwrap()
-                .reparent(&operator.borrow());
+            self.reparent(current_value_head.unwrap(), operator);
+            operator
         } else {
-            current_value_head.take().unwrap().reparent(&root);
+            self.reparent(current_value_head.unwrap(), 0);
+            0
         }
-        root
     }
 }

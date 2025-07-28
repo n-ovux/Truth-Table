@@ -1,85 +1,62 @@
-use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt::{self, Debug, Display};
-use std::rc::{Rc, Weak};
-
-#[derive(Debug)]
-struct Node<T> {
-    value: T,
-    parent: Weak<RefCell<Self>>,
-    children: Vec<Tree<T>>,
-}
 
 #[derive(Clone, Debug)]
 pub struct Tree<T> {
-    head: Rc<RefCell<Node<T>>>,
+    vertices: Vec<T>,
+    edges: Vec<(usize, usize)>,
 }
 
 impl<T: Debug + PartialEq + Copy> Tree<T> {
     pub fn new(value: T) -> Self {
         Tree {
-            head: Rc::new(RefCell::new(Node {
-                value,
-                parent: Weak::new(),
-                children: Vec::new(),
-            })),
+            vertices: vec![value],
+            edges: Vec::new(),
         }
     }
 
-    pub fn add_child(&self, value: T) -> Tree<T> {
-        let child = Rc::new(RefCell::new(Node {
-            value,
-            parent: Rc::downgrade(&self.head),
-            children: Vec::new(),
-        }));
-
-        self.head.borrow_mut().children.push(Tree {
-            head: child.clone(),
-        });
-        Tree {
-            head: child.clone(),
-        }
+    pub fn add_child(&mut self, index: usize, value: T) -> usize {
+        self.vertices.push(value);
+        self.edges.push((index, self.vertices.len() - 1));
+        self.vertices.len() - 1
     }
 
-    pub fn reparent(&self, new_parent: &Tree<T>) {
-        if let Some(parent) = self.head.borrow_mut().parent.upgrade() {
-            parent
-                .borrow_mut()
-                .children
-                .retain(|child| !Rc::ptr_eq(&child.head, &self.head))
-        }
-        self.head.borrow_mut().parent = Rc::downgrade(&new_parent.head);
-        new_parent.head.borrow_mut().children.push(Tree {
-            head: Rc::clone(&self.head),
-        })
-    }
-
-    pub fn replace_if_match(&mut self, target: T, value: T) {
-        if self.head.borrow().value == target {
-            self.head.borrow_mut().value = value;
-            self.head.borrow_mut().children.clear();
+    pub fn reparent(&mut self, child: usize, new_parent: usize) {
+        for edge in &mut self.edges {
+            if edge.1 == child {
+                edge.0 = new_parent;
+            }
         }
     }
 
     pub fn find_replace(&mut self, target: T, value: T) {
-        self.replace_if_match(target, value);
-        for child in &mut self.head.borrow_mut().children {
-            child.find_replace(target, value);
+        for (index, vertex) in self.vertices.iter_mut().enumerate() {
+            if *vertex == target {
+                *vertex = value;
+                self.edges.retain(|edge| edge.0 != index)
+            }
         }
     }
 
-    fn write(&self, f: &mut std::fmt::Formatter<'_>, depth: usize) -> fmt::Result {
-        writeln!(f, "{}{:?}", "  ".repeat(depth), self.head.borrow().value)?;
-
-        for child in &self.head.borrow().children {
-            child.write(f, depth + 1)?;
+    fn write(&self, f: &mut fmt::Formatter<'_>, index: usize, depth: usize) -> fmt::Result {
+        writeln!(f, "{}{:?}", "  ".repeat(depth), self.vertices[index])?;
+        let mut children: Vec<usize> = Vec::new();
+        for edge in &self.edges {
+            if edge.0 == index {
+                children.push(edge.1);
+            }
         }
+
+        for child in children {
+            self.write(f, child, depth + 1)?;
+        }
+
         Ok(())
     }
 }
 
 impl<T: Debug + PartialEq + Copy> Display for Tree<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        self.write(f, 0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f, 0, 0)
     }
 }
