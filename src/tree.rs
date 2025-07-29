@@ -38,6 +38,14 @@ impl<T: Debug + PartialEq + Copy> Tree<T> {
         }
     }
 
+    pub fn get_vertices(&self) -> &Vec<T> {
+        &self.vertices
+    }
+
+    pub fn get_edges(&self) -> &Vec<(usize, usize)> {
+        &self.edges
+    }
+
     fn write(&self, f: &mut fmt::Formatter<'_>, index: usize, depth: usize) -> fmt::Result {
         writeln!(f, "{}{:?}", "  ".repeat(depth), self.vertices[index])?;
         let mut children: Vec<usize> = Vec::new();

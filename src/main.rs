@@ -18,11 +18,12 @@ fn main() {
         panic!("Invalid input: {}", error);
     });
 
-    println!("{:?}", tokens);
-    println!("{:?}", variables);
-
     // Generate AST
     let mut ast = Tree::new(Grammar::Root);
     ast.create_ast(&tokens);
-    println!("\nFinal!\n{}", ast);
+    println!("\nAST:\n{}", ast);
+    for variable in &variables {
+        ast.find_replace(Grammar::Value(*variable), Grammar::Value('t'));
+    }
+    println!("Output: {}", ast.evaluate(0));
 }

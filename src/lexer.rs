@@ -50,6 +50,21 @@ pub fn lexer(text: &Vec<String>) -> Result<(Vec<Token>, Vec<char>), LexerError> 
         return Err(LexerError::NoVariables);
     }
     verify(&tokens)?;
+
+    loop {
+        let position: Option<usize> = tokens.windows(3).position(|window| {
+            window[0] == Token::OpeningBracket && window[2] == Token::ClosingBracket
+        });
+        if let Some(position) = position {
+            tokens.remove(position);
+            tokens.remove(position + 1);
+        } else {
+            break;
+        }
+    }
+
+    verify(&tokens)?;
+
     Ok((tokens, variables))
 }
 

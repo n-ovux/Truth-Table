@@ -11,6 +11,7 @@ pub enum Grammar {
 
 pub trait AST {
     fn create_ast(&mut self, tokens: &[Token]) -> usize;
+    fn evaluate(&self, index: usize) -> bool;
 }
 
 impl AST for Tree<Grammar> {
@@ -84,6 +85,41 @@ impl AST for Tree<Grammar> {
         } else {
             self.reparent(current_value_head.unwrap(), 0);
             0
+        }
+    }
+
+    fn evaluate(&self, index: usize) -> bool {
+        if let Grammar::Value(value) = self.get_vertices()[index] {
+            if value == 't' {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        let mut children: Vec<usize> = Vec::new();
+        for edge in self.get_edges() {
+            if edge.0 == index {
+                children.push(edge.1);
+            }
+        }
+
+        let mut values: Vec<bool> = Vec::new();
+        for child in &children {
+            values.push(self.evaluate(*child));
+        }
+
+        if values.len() != 1 && values.len() != 2 {
+            println!("{:?}", values);
+            panic!("incorrect numers of values");
+        }
+
+        match self.get_vertices()[index] {
+            Grammar::Root => values[0],
+            Grammar::Negation => !values[0],
+            Grammar::Operator(value) if value == '.' => values[0] && values[1],
+            Grammar::Operator(value) if value == '+' => values[0] || values[1],
+            _ => panic!("impossible"),
         }
     }
 }
