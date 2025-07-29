@@ -129,9 +129,12 @@ pub fn verify(tokens: &Vec<Token>) -> Result<(), LexerError> {
             Token::Negation => {
                 if let Token::Operator(_) = *last_token {
                 } else {
-                    let Token::Negation = *last_token else {
-                        return Err(LexerError::NoOperatorBeforeNegation);
-                    };
+                    if let Token::OpeningBracket = *last_token {
+                    } else {
+                        let Token::Negation = *last_token else {
+                            return Err(LexerError::NoOperatorBeforeNegation);
+                        };
+                    }
                 };
             }
         }

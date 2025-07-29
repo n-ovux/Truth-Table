@@ -21,9 +21,27 @@ fn main() {
     // Generate AST
     let mut ast = Tree::new(Grammar::Root);
     ast.create_ast(&tokens);
-    println!("\nAST:\n{}", ast);
+
+    // Evaluate Truth Table
     for variable in &variables {
-        ast.find_replace(Grammar::Value(*variable), Grammar::Value('t'));
+        print!("{} ", variable);
     }
-    println!("Output: {}", ast.evaluate(0));
+    println!("{}", text.concat());
+    for index in 0..2_usize.pow(variables.len().try_into().unwrap()) {
+        let mut ast_valued = ast.clone();
+        for (position, variable) in variables.iter().enumerate() {
+            if (index >> position) & 1 == 1 {
+                ast_valued.find_replace(Grammar::Value(*variable), Grammar::Value('c'));
+                print!("c ");
+            } else if (index >> position) & 1 == 0 {
+                ast_valued.find_replace(Grammar::Value(*variable), Grammar::Value('t'));
+                print!("t ");
+            }
+        }
+        if ast_valued.evaluate(0) {
+            println!("{}t", " ".repeat(text.len() / 2));
+        } else {
+            println!("{}c", " ".repeat(text.len() / 2));
+        }
+    }
 }
